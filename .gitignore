@@ -1,22 +1,184 @@
-### AL ###
-#Template for AL projects for Dynamics 365 Business Central
-#launch.json folder
-.vscode/
-#Cache folder
-.alcache/
-#Symbols folder
-.alpackages/
-#Snapshots folder
-.snapshots/
-#Testing Output folder
-.output/
-#Extension App-file
-*.app
-#Rapid Application Development File
-rad.json
-#Translation Base-file
-*.g.xlf
-#License-file
-*.flf
-#Test results file
-TestResults.xml
+/*
+
+This data set is a sales dataset of one of the most famous NFT projects, Cryptopunks. 
+This contains sales from January 1st, 2018 to December 31st, 2021.
+
+*/
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-- Sales occurred during January 1st, 2018 to December 31st, 2021 
+
+SELECT COUNT(*) AS total_sales
+FROM cryptopunkdata 
+WHERE day BETWEEN '2018-01-01' AND '2021-12-31';
+
+
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-- Return the top 5 most expensive transactions (by USD price) for this data set. 
+
+select name, eth_price, usd_price, day 
+from cryptopunkdata 
+order by usd_price desc limit 5;
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-- Row for each transaction with an event column, a USD price column, and a moving average of USD price (averages the last 50 transactions)
+
+select day as event, usd_price, avg(usd_price) over ( order by day desc  rows between 49 preceding and current row)
+as moving_average 
+from cryptopunkdata 
+order by day desc;
+
+
+
+
+
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-- NFTs Average sale price in USD.
+
+select name as NFT_name, avg(usd_price) as average_price 
+from cryptopunkdata 
+group by name 
+order by average_price desc;
+
+
+
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-- Each day of the week and the number of sales that occurred on that day of the week - 
+
+select dayname(day) as week_day, count(*) as sales_count,avg(eth_price) as avg_eth_price 
+from cryptopunkdata 
+group by week_day 
+order by sales_count asc;
+
+
+
+
+
+
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-- Histogram of ETH price ranges.  - 
+
+select floor(eth_price / 100) * 100 as eth_price_range,  rpad('*', COUNT(*), '*') as histogram
+from cryptopunkdata
+group by eth_price_range
+order by eth_price_range;
+
+
+
+
+
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-- Highest price each NFT was bought/ Lowest price each NFT was bought - 
+
+select name, max(usd_price) as price, 'highest' as status
+from cryptopunkdata
+group by name
+UNION ALL
+select name, min(usd_price) as price, 'lowest' as status
+from cryptopunkdata
+group by name
+order by name asc, status asc;
+
+
+
+
+
+
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-- What NFT sold the most each month / year combination -
+
+select  year(day) as year, month(day) as month, substring_index(GROUP_CONCAT(name order by usd_price desc), ',', 1) as top_nft_name,
+max(usd_price) as top_nft_price_usd 
+from cryptopunkdata
+group by  year, month
+order by  year asc, month asc;
+
+
+
+
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-- Total volume (sum of all sales) on MONTHLY basis - 
+
+select year(day) as year, month(day) as month, round (sum(usd_price), -2) as volume 
+from cryptopunkdata 
+group by year, month 
+order by year asc, month asc;
+
+
+
+
+
+
+
+
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-- Estimated average value calculator - represents the price of the collection every day-
+
+create temporary table DailyAverages as 
+select day as  event_date, usd_price, avg(usd_price) over(partition by day) as daily_average_price
+from cryptopunkdata;
+-- then 
+select event_date, avg(usd_price) as estimated_average_value from DailyAverages
+where usd_price >= 0.10 * daily_average_price
+group by event_date;
+
+
+
+
+
+
+
+
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+-- Complete list ordered by wallet profitability - 
+
+
+select wallet_address,
+    SUM(profit_or_loss) AS total_profit_or_loss
+FROM (
+    SELECT
+        buyer_address AS wallet_address,
+        -usd_price AS profit_or_loss
+    FROM
+        cryptopunkdata
+    UNION ALL
+    SELECT
+        seller_address AS wallet_address,
+        usd_price AS profit_or_loss
+    FROM
+        cryptopunkdata
+) AS transactions
+GROUP BY
+    wallet_address
+ORDER BY
+    total_profit_or_loss DESC;
